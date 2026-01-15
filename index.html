@@ -1,0 +1,307 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>WellSense AI – Carnival</title>
+
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@600&family=Poppins&display=swap" rel="stylesheet">
+
+<style>
+body{
+  margin:0;
+  font-family:Poppins,sans-serif;
+  background:#070b24;
+  color:#e0e7ff;
+  overflow-x:hidden;
+}
+header{
+  text-align:center;
+  padding:25px 15px;
+  background:linear-gradient(135deg,#312e81,#4f46e5,#8b5cf6);
+  box-shadow:0 0 25px #6366f1;
+}
+header h1{
+  font-family:'Orbitron',sans-serif;
+  font-size:2.4rem;
+  letter-spacing:2px;
+  color:#c7d2fe;
+  white-space:nowrap;
+}
+header p{margin-top:8px; opacity:.85;}
+.floating-icons span{
+  position:absolute;
+  top:50%;
+  font-size:1.6rem;
+  opacity:.6;
+  pointer-events:none;
+}
+@keyframes floatUp{from{transform:translateY(0)}to{transform:translateY(-120vh)}}
+@keyframes floatDown{from{transform:translateY(0)}to{transform:translateY(120vh)}}
+
+main{max-width:900px;margin:auto;padding:20px}
+.card{
+  background:rgba(15,23,42,.9);
+  border:2px solid #4f46e5;
+  border-radius:16px;
+  padding:20px;
+  margin-bottom:20px;
+  box-shadow:0 0 20px rgba(99,102,241,.4);
+}
+input,select,button{
+  width:100%;
+  padding:10px;
+  margin-top:8px;
+  border-radius:8px;
+  border:none;
+  font-size:15px;
+}
+input,select{background:#020617;color:white;border:1px solid #6366f1}
+button{background:#4f46e5;color:white;cursor:pointer}
+button:hover{background:#6366f1}
+#chat{background:#020617;height:220px;overflow-y:auto;border-radius:10px;padding:10px;}
+.user{color:#93c5fd;margin:4px 0}
+.bot{color:#c7d2fe;margin:4px 0}
+#reportResult{background:rgba(15,23,42,.9);border:2px dashed #6366f1;padding:15px;border-radius:10px;}
+video{width:100%;border-radius:10px;margin-top:10px;}
+</style>
+</head>
+<body>
+<div class="floating-icons"></div>
+<header>
+  <h1 id="wellSenseHeading"></h1>
+  <p>AI-Powered Wellness Awareness System</p>
+</header>
+
+<main>
+<div class="card" id="detailsSection">
+  <h2>🧍 Visitor Details</h2>
+  <input id="name" placeholder="Name">
+  <input id="age" type="number" placeholder="Age">
+  <select id="occupation">
+    <option value="">Are you a?</option>
+    <option value="student">Student</option>
+    <option value="worker">Worker</option>
+    <option value="self">Self-Employed</option>
+  </select>
+  <button onclick="submitDetails()">Proceed</button>
+</div>
+
+<div id="mainApp" style="display:none">
+<div class="card">
+  <h2>🎤 Voice & 📷 Posture Analysis</h2>
+  <button onclick="startAnalysis()">Start 5-Second Analysis</button>
+  <div id="voiceStatus"></div>
+  <div id="videoStatus"></div>
+  <video id="video" autoplay muted></video>
+</div>
+
+<div class="card">
+  <h2>📄 Wellness Report</h2>
+  <div id="reportResult">Report will appear here.</div>
+  <div style="margin-top:10px;">
+    <label><input type="checkbox" id="dietToggle"> Show Diet Chart</label>
+    <div id="dietChart" style="display:none;margin-top:10px;">
+      <ul>
+        <li>Breakfast: Fruits + Oats</li>
+        <li>Lunch: Vegetables + Protein</li>
+        <li>Snack: Nuts or Fruits</li>
+        <li>Dinner: Light meal + Salad</li>
+        <li>Water: 2–3 liters/day</li>
+      </ul>
+    </div>
+  </div>
+  <div style="margin-top:10px;">
+    <button onclick="shareReport()">Share via WhatsApp / Email</button>
+    <button onclick="downloadReport()">Download Report</button>
+  </div>
+</div>
+
+<div class="card">
+  <h2>💬 AURORA – AI Guide</h2>
+  <select id="chatLang">
+    <option value="en-US">English</option>
+    <option value="hi-IN">Hindi</option>
+    <option value="hi-en">Hinglish</option>
+  </select>
+  <div id="chat"></div>
+  <input id="msg" placeholder="Ask something...">
+  <button onclick="send()">Send</button>
+</div>
+</div>
+</main>
+
+<script>
+function sanitize(str){return str.replace(/[<>]/g,"");}
+const headingText="WELL SENSE AI";let hi=0;
+function typeHeading(){const el=document.getElementById("wellSenseHeading");if(hi<headingText.length){el.textContent+=headingText[hi++];setTimeout(typeHeading,120);}}
+typeHeading();
+
+const icons=["🎤","📷","🧠","💬","📊","🍎","🧍","🔊"];
+const container=document.querySelector(".floating-icons");
+icons.forEach((ic,i)=>{const s=document.createElement("span");s.textContent=ic;s.style.left=(10+i*(80/icons.length))+"%";s.style.animation=(i%2?"floatDown":"floatUp")+" "+(10+Math.random()*5)+"s linear infinite";container.appendChild(s);});
+
+let detailsSubmitted=false;
+function submitDetails(){
+  const n=sanitize(document.getElementById("name").value.trim());
+  const a=sanitize(document.getElementById("age").value.trim());
+  const o=document.getElementById("occupation").value;
+  if(!n || !a || !o){ alert("Please enter all details first"); return; }
+  detailsSubmitted=true;
+  document.getElementById("detailsSection").style.display="none";
+  document.getElementById("mainApp").style.display="block";
+}
+
+let audioContext, analyser, microphone;
+async function startAnalysis(){
+  if(!detailsSubmitted){alert("Enter details first"); return;}
+  const voiceStatus=document.getElementById("voiceStatus");
+  const videoStatus=document.getElementById("videoStatus");
+  const video=document.getElementById("video");
+  voiceStatus.textContent="🎤 Analysing voice...";
+  videoStatus.textContent="📷 Analysing posture...";
+  
+  if(navigator.mediaDevices.getUserMedia){
+    try{
+      const stream=await navigator.mediaDevices.getUserMedia({video:true,audio:true});
+      video.srcObject=stream;
+      audioContext=new (window.AudioContext || window.webkitAudioContext)();
+      microphone=audioContext.createMediaStreamSource(stream);
+      analyser=audioContext.createAnalyser();
+      analyser.fftSize=256;
+      microphone.connect(analyser);
+    }catch(e){alert("Camera/Microphone access required."); return;}
+  }
+  
+  let voiceData=[], postureData=[];
+  const interval=setInterval(()=>{
+    const array=new Uint8Array(analyser.frequencyBinCount);
+    analyser.getByteFrequencyData(array);
+    const avg=array.reduce((a,b)=>a+b,0)/array.length;
+    voiceData.push(avg);
+    
+    const ratio=video.videoWidth/video.videoHeight;
+    if(ratio>0.55 && ratio<0.8) postureData.push(0);
+    else if(ratio<0.55) postureData.push(1);
+    else postureData.push(2);
+  },100);
+  
+  setTimeout(()=>{
+    clearInterval(interval);
+    const voiceAvg=voiceData.reduce((a,b)=>a+b,0)/voiceData.length;
+    const voiceStress=voiceAvg<40?0:voiceAvg<70?1:2;
+    const postureScore=Math.round(postureData.reduce((a,b)=>a+b,0)/postureData.length);
+    
+    const occ=document.getElementById("occupation").value;
+    let base=1; let advice="";
+    if(occ==="student"){ base=1; advice="Prepare a new timetable routine.";}
+    else if(occ==="worker"){ base=2; advice="Take short walks and eye breaks.";}
+    else{ base=1.5; advice="Meditate 10–15 mins daily.";}
+    const finalStress=Math.round((base+voiceStress+postureScore)/3);
+    const levels=["Low","Moderate","High"];
+    
+    const report=document.getElementById("reportResult");
+    report.innerHTML=`
+      <h3>Wellness Report</h3>
+      <ul>
+        <li>Name: ${sanitize(document.getElementById("name").value)}</li>
+        <li>Age: ${sanitize(document.getElementById("age").value)}</li>
+        <li>Occupation: ${occ}</li>
+        <li>Stress Level: ${levels[finalStress]}</li>
+        <li>Voice Analysis: ${["Calm","Moderate","High"][voiceStress]}</li>
+        <li>Posture Analysis: ${["Good","Average","Poor"][postureScore]}</li>
+        <li>Recommendation: ${advice}</li>
+      </ul>`;
+    voiceStatus.textContent="✔ Voice analysis complete";
+    videoStatus.textContent="✔ Posture analysis complete";
+  },5000);
+}
+
+document.getElementById("dietToggle").addEventListener("change",function(){
+  document.getElementById("dietChart").style.display=this.checked?"block":"none";
+});
+
+function speak(text){
+  const u = new SpeechSynthesisUtterance(text);
+  const voices = window.speechSynthesis.getVoices();
+  const femaleVoice = voices.find(v => /female|zira|samantha|google us english/i.test(v.name));
+  if(femaleVoice) u.voice = femaleVoice;
+  const langSelect = document.getElementById("chatLang");
+  if(langSelect.value === "hi-IN") u.lang = "hi-IN";
+  else if(langSelect.value === "hi-en") u.lang = "en-US";
+  else u.lang = "en-US";
+  u.rate = 0.95; u.pitch = 1;
+  window.speechSynthesis.speak(u);
+}
+
+function reply(msg){
+  msg = msg.toLowerCase();
+  if(msg.includes("hi")||msg.includes("hello")||msg.includes("hey"))
+    return "Hello! I am AURORA, your WellSense AI guide 👋";
+  if(msg.includes("how") && msg.includes("work"))
+    return "I analyse voice, posture and daily habits to generate a wellness report.";
+  if(msg.includes("how") && msg.includes("use"))
+    return "Enter your details, start analysis, and view your wellness report.";
+  if(msg.includes("how can i do") || msg.includes("how to start"))
+    return "Just enter your details and click on Start Analysis.";
+  if(msg.includes("help") || msg.includes("can you help"))
+    return "Yes! I will guide you step-by-step throughout the website.";
+  if(msg.includes("will you help"))
+    return "Of course! I’m here to help you anytime 😊";
+  if(msg.includes("what is this") || msg.includes("about"))
+    return "WellSense AI is an awareness system for stress, posture, and wellness.";
+  if(msg.includes("voice"))
+    return "Voice analysis checks tone variation to estimate stress levels.";
+  if(msg.includes("camera") || msg.includes("posture"))
+    return "Posture analysis uses the camera to observe sitting posture.";
+  if(msg.includes("report"))
+    return "The report summarises your stress, posture, and wellness status.";
+  if(msg.includes("diet"))
+    return "A balanced diet with fruits, water, and regular meals is recommended.";
+  if(msg.includes("privacy"))
+    return "Your privacy is protected. No data is stored or shared.";
+  if(msg.includes("thank"))
+    return "You're most welcome! Stay healthy and confident 🌱";
+  if(msg.includes("bye"))
+    return "Goodbye! Take care of your health 👋";
+  return "I can help you with wellness, stress, posture, diet, and how this site works.";
+}
+
+function send(){
+  const userMsg = sanitize(msg.value);
+  if(!userMsg) return;
+  chat.innerHTML+=`<div class="user">You: ${userMsg}</div>`;
+  const r = reply(userMsg);
+  chat.innerHTML+=`<div class="bot">AURORA: ${r}</div>`;
+  chat.scrollTop = chat.scrollHeight;
+  msg.value = "";
+  speak(r);
+}
+
+function shareReport(){
+  const text = encodeURIComponent(document.getElementById("reportResult").innerText);
+  window.open(`https://api.whatsapp.com/send?text=${text}`, '_blank');
+  window.open(`mailto:?subject=Wellness Report&body=${text}`, '_blank');
+}
+
+function downloadReport(){
+  const content = document.getElementById("reportResult").innerText.replace(/\n/g,'<br>');
+  const newWin = window.open('','_blank');
+  newWin.document.write(`
+    <html><head><title>WellSense AI Report</title>
+    <style>
+      body{font-family:Poppins,sans-serif;background:#070b24;color:#e0e7ff;padding:30px;}
+      h1{text-align:center;color:#c7d2fe;text-shadow:0 0 15px #8b5cf6;}
+      .line{border-bottom:2px solid #6366f1;margin:15px 0;}
+    </style>
+    </head>
+    <body>
+      <h1>WellSense AI Report</h1>
+      <div>${content}</div>
+    </body></html>
+  `);
+  newWin.document.close();
+}
+</script>
+</body>
+</html>
